@@ -1,0 +1,631 @@
+<!doctype html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>ボートレース予想 公開検証</title>
+<meta name="description" content="機械学習モデルの3連単予想を、締切前に全件公開して回収率を記録しています。外れも消しません。">
+<style>
+:root {
+  color-scheme: light;
+  --surface-0: #f4f3f0;
+  --surface-1: #fcfcfb;
+  --text-primary: #0b0b0b;
+  --text-secondary: #52514e;
+  --text-muted: #85837d;
+  --rule: #e8e7e3;
+  --series-1: #2a78d6;
+  --series-2: #eb6834;
+  --series-3: #1baf7a;
+  --good: #1a7f47;
+  --bad: #c0392b;
+  --warn-bg: #fdf4e3;
+  --warn-ink: #7a5a12;
+  --warn-rule: #e8d5a8;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    color-scheme: dark;
+    --surface-0: #121211;
+    --surface-1: #1a1a19;
+    --text-primary: #ffffff;
+    --text-secondary: #c3c2b7;
+    --text-muted: #8d8c84;
+    --rule: #2f2f2d;
+    --series-1: #3987e5;
+    --series-2: #d95926;
+    --series-3: #199e70;
+    --good: #4ec27f;
+    --bad: #e66767;
+    --warn-bg: #2a2416;
+    --warn-ink: #e0c98a;
+    --warn-rule: #4a3f22;
+  }
+}
+:root[data-theme="dark"] {
+  color-scheme: dark;
+  --surface-0: #121211;
+  --surface-1: #1a1a19;
+  --text-primary: #ffffff;
+  --text-secondary: #c3c2b7;
+  --text-muted: #8d8c84;
+  --rule: #2f2f2d;
+  --series-1: #3987e5;
+  --series-2: #d95926;
+  --series-3: #199e70;
+  --good: #4ec27f;
+  --bad: #e66767;
+  --warn-bg: #2a2416;
+  --warn-ink: #e0c98a;
+  --warn-rule: #4a3f22;
+}
+
+* { box-sizing: border-box; }
+html, body { margin: 0; padding: 0; }
+body {
+  background: var(--surface-0);
+  color: var(--text-primary);
+  font-family: system-ui, -apple-system, "Segoe UI", "Hiragino Kaku Gothic ProN", "Noto Sans JP", sans-serif;
+  font-size: 15px;
+  line-height: 1.7;
+  -webkit-text-size-adjust: 100%;
+}
+.wrap { max-width: 940px; margin: 0 auto; padding: 0 16px 72px; }
+h1, h2, h3 { line-height: 1.35; margin: 0; font-weight: 650; letter-spacing: .01em; }
+h1 { font-size: 1.45rem; }
+h2 { font-size: 1.1rem; margin-bottom: 4px; }
+section { margin-top: 44px; }
+.sub { color: var(--text-secondary); font-size: .85rem; margin: 2px 0 16px; }
+.num { font-variant-numeric: tabular-nums; font-feature-settings: "tnum"; }
+
+header { padding: 28px 0 0; }
+.titlerow { display: flex; align-items: baseline; gap: 12px; flex-wrap: wrap; }
+.live {
+  display: inline-flex; align-items: center; gap: 6px; font-size: .75rem;
+  color: var(--text-muted); margin-left: auto;
+}
+.dot { width: 7px; height: 7px; border-radius: 50%; background: var(--good); }
+.dot.stale { background: var(--text-muted); }
+#themeBtn {
+  background: none; border: 1px solid var(--rule); color: var(--text-secondary);
+  border-radius: 999px; padding: 3px 11px; font-size: .75rem; cursor: pointer;
+  font-family: inherit;
+}
+
+.banner {
+  margin-top: 20px; padding: 13px 16px; border-radius: 10px;
+  background: var(--warn-bg); border: 1px solid var(--warn-rule);
+  color: var(--warn-ink); font-size: .85rem;
+}
+.banner strong { font-weight: 700; }
+
+.hero {
+  margin-top: 24px; background: var(--surface-1); border: 1px solid var(--rule);
+  border-radius: 12px; padding: 22px 24px;
+}
+.hero .label { font-size: .8rem; color: var(--text-secondary); }
+.hero .value { font-size: 3rem; font-weight: 680; line-height: 1.1; letter-spacing: -.02em; }
+.hero .value.neg { color: var(--bad); }
+.hero .value.pos { color: var(--good); }
+.hero .gap { font-size: .85rem; color: var(--text-secondary); margin-top: 6px; }
+
+.tiles { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 12px; margin-top: 12px; }
+.tile { background: var(--surface-1); border: 1px solid var(--rule); border-radius: 10px; padding: 14px 16px; }
+.tile .k { font-size: .75rem; color: var(--text-secondary); }
+.tile .v { font-size: 1.5rem; font-weight: 640; letter-spacing: -.01em; }
+.tile .n { font-size: .72rem; color: var(--text-muted); }
+
+.card { background: var(--surface-1); border: 1px solid var(--rule); border-radius: 12px; padding: 18px 16px 12px; }
+figure { margin: 0; }
+figcaption { font-size: .75rem; color: var(--text-muted); margin-top: 8px; }
+svg { display: block; width: 100%; height: auto; overflow: visible; }
+.legend { display: flex; flex-wrap: wrap; gap: 14px; font-size: .78rem; color: var(--text-secondary); margin-bottom: 10px; }
+.legend span { display: inline-flex; align-items: center; gap: 6px; }
+.swatch { width: 10px; height: 10px; border-radius: 2px; }
+
+.races { display: grid; grid-template-columns: repeat(auto-fit, minmax(230px, 1fr)); gap: 12px; }
+.race { background: var(--surface-1); border: 1px solid var(--rule); border-radius: 10px; padding: 13px 15px; }
+.race .top { display: flex; align-items: baseline; gap: 8px; }
+.race .venue { font-weight: 640; }
+.race .r { color: var(--text-secondary); font-size: .85rem; }
+.race .cd { margin-left: auto; font-size: .8rem; color: var(--text-secondary); }
+.race .cd.soon { color: var(--bad); font-weight: 640; }
+.race .combo { font-size: 1.55rem; font-weight: 660; letter-spacing: .04em; margin-top: 6px; }
+.race .meta { font-size: .78rem; color: var(--text-muted); }
+
+table { width: 100%; border-collapse: collapse; font-size: .82rem; }
+th, td { text-align: left; padding: 7px 8px; border-bottom: 1px solid var(--rule); white-space: nowrap; }
+th { font-weight: 600; color: var(--text-secondary); font-size: .75rem; position: sticky; top: 0; background: var(--surface-1); }
+td.r, th.r { text-align: right; }
+.hit { color: var(--good); font-weight: 640; }
+.miss { color: var(--text-muted); }
+.scroller { overflow-x: auto; max-height: 560px; overflow-y: auto; border: 1px solid var(--rule); border-radius: 10px; background: var(--surface-1); }
+.filters { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 12px; }
+.filters button {
+  font-family: inherit; font-size: .78rem; padding: 5px 13px; border-radius: 999px; cursor: pointer;
+  border: 1px solid var(--rule); background: var(--surface-1); color: var(--text-secondary);
+}
+.filters button[aria-pressed="true"] { background: var(--text-primary); color: var(--surface-1); border-color: var(--text-primary); }
+
+footer { margin-top: 56px; padding-top: 20px; border-top: 1px solid var(--rule); font-size: .78rem; color: var(--text-muted); }
+footer a { color: var(--text-secondary); }
+code { font-family: ui-monospace, "SFMono-Regular", Consolas, monospace; font-size: .95em; }
+
+#tip {
+  position: fixed; pointer-events: none; opacity: 0; transition: opacity .1s;
+  background: var(--text-primary); color: var(--surface-1); font-size: .76rem;
+  padding: 7px 10px; border-radius: 7px; z-index: 40; line-height: 1.5; white-space: nowrap;
+}
+.empty { color: var(--text-muted); font-size: .85rem; padding: 8px 0 14px; }
+</style>
+</head>
+<body>
+<div class="wrap">
+
+<header>
+  <div class="titlerow">
+    <h1>ボートレース予想 公開検証</h1>
+    <span class="live"><span class="dot" id="dot"></span><span id="freshness">読み込み中…</span></span>
+    <button id="themeBtn" type="button">テーマ</button>
+  </div>
+  <p class="sub">機械学習モデルが出した3連単予想を、<strong>締切前に全件</strong>公開しています。当たりも外れも消しません。</p>
+
+  <div class="banner">
+    <strong>このモデルはまだ勝てていません。</strong>
+    過去25,781レースの実測で、一番成績の良い買い方でも回収率は92.6%（100%＝損益ゼロ）。
+    購入を勧めるものではなく、<strong>「どこまで行けるか」の検証記録</strong>として公開しています。
+  </div>
+</header>
+
+<section id="heroSec" style="margin-top:24px">
+  <div class="hero">
+    <div class="label">公開してからの累積回収率<span id="heroCat"></span></div>
+    <div class="value num" id="heroValue">—</div>
+    <div class="gap" id="heroGap"></div>
+  </div>
+  <div class="tiles" id="tiles"></div>
+</section>
+
+<section>
+  <h2>締切前のレース</h2>
+  <p class="sub">いま公開している予想。この時刻より前に出したことは、リポジトリのコミット履歴に残ります。</p>
+  <div class="races" id="upcoming"></div>
+</section>
+
+<section>
+  <h2>累積回収率の推移</h2>
+  <p class="sub">買い方ごとに、公開初日からの通算。100%を超えて初めて「勝っている」と言えます。</p>
+  <div class="card">
+    <figure>
+      <div class="legend" id="lineLegend"></div>
+      <div id="lineChart"></div>
+      <figcaption>1点100円で全部買った場合の通算。100%＝損益ゼロ、75%＝でたらめに買ったときの期待値。</figcaption>
+    </figure>
+  </div>
+</section>
+
+<section>
+  <h2>買い方ごとの成績（過去25,781レースの実測）</h2>
+  <p class="sub">2026年4〜9月の実際の払戻金で測った、それぞれの買い方を続けた場合の回収率。</p>
+  <div class="card">
+    <figure>
+      <div id="barChart"></div>
+      <figcaption>控除率25%があるため、何も考えずに買うと75%に収束します。どの買い方もまだ100%に届いていません。</figcaption>
+    </figure>
+  </div>
+</section>
+
+<section>
+  <h2>全レースの予想と結果</h2>
+  <p class="sub" id="tableSub"></p>
+  <div class="filters" id="filters"></div>
+  <div class="scroller">
+    <table>
+      <thead><tr>
+        <th>場</th><th class="r">R</th><th>締切</th><th>区分</th><th>買い目</th>
+        <th class="r">確率</th><th class="r">オッズ</th><th class="r">期待値</th><th>結果</th><th class="r">払戻</th>
+      </tr></thead>
+      <tbody id="tbody"></tbody>
+    </table>
+  </div>
+</section>
+
+<footer>
+  <p id="commitLine"></p>
+  <p>
+    このサイトは予想の販売も有料サービスの提供も行いません。掲載内容は情報提供のみを目的としたもので、
+    的中や利益を保証するものではありません。舟券の購入は20歳以上・自己責任で。
+  </p>
+  <p>ギャンブル依存でお困りの方は <a href="https://www.mhlw.go.jp/stf/seisakunitsuite/bunya/0000070789.html" rel="noopener">厚生労働省の相談窓口</a> へ。</p>
+</footer>
+
+</div>
+<div id="tip" role="status"></div>
+
+<script>
+const NS = "http://www.w3.org/2000/svg";
+const CATS = ["厚め", "本命5選", "抑え", "穴予想", "大穴狙い"];
+const SERIES_VAR = ["--series-1", "--series-2", "--series-3"];
+const REFRESH_MS = 60000;
+// これ未満の点数では累積回収率に色を付けない（誤差が大きすぎるため）
+const MIN_BETS = 500;
+
+let latest = null, history = null, fetchedAt = null, filter = "すべて";
+
+const $ = (id) => document.getElementById(id);
+const pct = (v, d) => v == null ? "—" : (v * 100).toFixed(d == null ? 1 : d) + "%";
+const el = (tag, attrs, text) => {
+  const n = document.createElementNS(NS, tag);
+  for (const k in (attrs || {})) n.setAttribute(k, attrs[k]);
+  if (text != null) n.textContent = text;
+  return n;
+};
+const cssVar = (name) => getComputedStyle(document.documentElement).getPropertyValue(name).trim();
+
+/* ---------- テーマ ---------- */
+(function theme() {
+  try {
+    const saved = localStorage.getItem("theme");
+    if (saved) document.documentElement.setAttribute("data-theme", saved);
+  } catch (e) {}
+  $("themeBtn").addEventListener("click", () => {
+    const dark = matchMedia("(prefers-color-scheme: dark)").matches;
+    const cur = document.documentElement.getAttribute("data-theme") || (dark ? "dark" : "light");
+    const next = cur === "dark" ? "light" : "dark";
+    document.documentElement.setAttribute("data-theme", next);
+    try { localStorage.setItem("theme", next); } catch (e) {}
+    render();
+  });
+})();
+
+/* ---------- ツールチップ ---------- */
+const tip = $("tip");
+function showTip(evt, html) {
+  tip.innerHTML = html;
+  tip.style.opacity = "1";
+  const r = tip.getBoundingClientRect();
+  let x = evt.clientX + 14, y = evt.clientY - r.height - 10;
+  if (x + r.width > innerWidth - 8) x = evt.clientX - r.width - 14;
+  if (y < 8) y = evt.clientY + 18;
+  tip.style.left = x + "px";
+  tip.style.top = y + "px";
+}
+const hideTip = () => { tip.style.opacity = "0"; };
+addEventListener("scroll", hideTip, { passive: true });
+
+/* ---------- 取得 ---------- */
+async function load() {
+  const bust = "?t=" + Date.now();
+  try {
+    const res = await Promise.all([
+      fetch("data/latest.json" + bust).then(r => r.json()),
+      fetch("data/history.json" + bust).then(r => r.json()),
+    ]);
+    latest = res[0]; history = res[1]; fetchedAt = Date.now();
+    render();
+  } catch (e) {
+    $("freshness").textContent = "更新できませんでした";
+    $("dot").classList.add("stale");
+  }
+}
+
+/* ---------- 折れ線：累積回収率 ---------- */
+function lineChart(days, charted) {
+  const box = $("lineChart");
+  box.textContent = "";
+  const legend = $("lineLegend");
+  legend.textContent = "";
+
+  const series = charted.map((cat, i) => ({
+    cat: cat, color: cssVar(SERIES_VAR[i]),
+    pts: days.map((d, x) => ({ x: x, date: d.date, v: d.cumulative && d.cumulative[cat] ? d.cumulative[cat].roi : null }))
+             .filter(p => p.v != null),
+  })).filter(s => s.pts.length);
+
+  if (!series.length) {
+    box.innerHTML = '<p class="empty">まだ確定した結果がありません。</p>';
+    return;
+  }
+  series.forEach(s => {
+    const sp = document.createElement("span");
+    sp.innerHTML = '<span class="swatch" style="background:' + s.color + '"></span>' + s.cat;
+    legend.appendChild(sp);
+  });
+
+  const W = 880, H = 300, m = { t: 16, r: 74, b: 30, l: 46 };
+  const iw = W - m.l - m.r, ih = H - m.t - m.b;
+  const all = series.reduce((a, s) => a.concat(s.pts.map(p => p.v)), [1.0, 0.75]);
+  const lo = Math.min.apply(null, all) - 0.06, hi = Math.max.apply(null, all) + 0.06;
+  const n = Math.max(days.length - 1, 1);
+  const X = (x) => m.l + (days.length === 1 ? iw / 2 : (x / n) * iw);
+  const Y = (v) => m.t + ih - ((v - lo) / (hi - lo)) * ih;
+
+  const svg = el("svg", { viewBox: "0 0 " + W + " " + H, role: "img",
+    "aria-label": "買い方ごとの累積回収率の推移" });
+
+  // 目盛り：実線のヘアライン
+  const step = (hi - lo) > 0.6 ? 0.2 : 0.1;
+  for (let v = Math.ceil(lo / step) * step; v <= hi; v += step) {
+    svg.appendChild(el("line", { x1: m.l, x2: m.l + iw, y1: Y(v), y2: Y(v),
+      stroke: cssVar("--rule"), "stroke-width": 1 }));
+    svg.appendChild(el("text", { x: m.l - 9, y: Y(v) + 4, "text-anchor": "end",
+      fill: cssVar("--text-muted"), "font-size": 11 }, Math.round(v * 100) + "%"));
+  }
+  // しきい値は破線で区別する（目盛りではないため）
+  [[1.0, "損益ゼロ 100%"], [0.75, "でたらめ 75%"]].forEach(function (t) {
+    if (t[0] < lo || t[0] > hi) return;
+    svg.appendChild(el("line", { x1: m.l, x2: m.l + iw, y1: Y(t[0]), y2: Y(t[0]),
+      stroke: cssVar("--text-muted"), "stroke-width": 1.5, "stroke-dasharray": "5 4" }));
+    svg.appendChild(el("text", { x: m.l + 6, y: Y(t[0]) - 6, fill: cssVar("--text-muted"),
+      "font-size": 11 }, t[1]));
+  });
+
+  const ends = [];
+  series.forEach(s => {
+    if (s.pts.length > 1) {
+      svg.appendChild(el("path", {
+        d: s.pts.map((p, i) => (i ? "L" : "M") + X(p.x) + " " + Y(p.v)).join(" "),
+        fill: "none", stroke: s.color, "stroke-width": 2,
+        "stroke-linejoin": "round", "stroke-linecap": "round" }));
+    }
+    const last = s.pts[s.pts.length - 1];
+    svg.appendChild(el("circle", { cx: X(last.x), cy: Y(last.v), r: 5, fill: s.color,
+      stroke: cssVar("--surface-1"), "stroke-width": 2 }));
+    ends.push({ x: X(last.x), y: Y(last.v), text: pct(last.v), color: s.color });
+  });
+
+  // 直接ラベルは終点だけ。値が近いと重なるので、上から順に最小間隔だけ押し下げる
+  ends.sort((a, b) => a.y - b.y);
+  const GAP = 15;
+  for (let i = 1; i < ends.length; i++) {
+    if (ends[i].y - ends[i - 1].y < GAP) ends[i].y = ends[i - 1].y + GAP;
+  }
+  ends.forEach(function (e) {
+    // 押し下げるとどの点のラベルか分からなくなるので、系列色の小さな印を添える
+    svg.appendChild(el("rect", { x: e.x + 9, y: e.y - 4, width: 7, height: 7, rx: 2,
+      fill: e.color }));
+    // 100%の破線と重なっても読めるよう、地の色で縁取りしてから塗る
+    svg.appendChild(el("text", { x: e.x + 21, y: e.y + 4, fill: cssVar("--text-primary"),
+      "font-size": 12, "font-weight": 600, stroke: cssVar("--surface-1"),
+      "stroke-width": 3.5, "paint-order": "stroke" }, e.text));
+  });
+
+  // x軸ラベルは端だけ
+  days.forEach((d, i) => {
+    if (days.length > 1 && i !== 0 && i !== days.length - 1) return;
+    svg.appendChild(el("text", { x: X(i), y: H - 8,
+      "text-anchor": days.length === 1 ? "middle" : (i ? "end" : "start"),
+      fill: cssVar("--text-muted"), "font-size": 11 }, d.date.slice(5)));
+  });
+
+  // クロスヘア＋ツールチップ
+  const cross = el("line", { y1: m.t, y2: m.t + ih, stroke: cssVar("--text-muted"),
+    "stroke-width": 1, opacity: 0 });
+  svg.appendChild(cross);
+  const hot = el("rect", { x: m.l, y: m.t, width: iw, height: ih, fill: "transparent" });
+  svg.appendChild(hot);
+  hot.addEventListener("pointermove", (e) => {
+    const r = svg.getBoundingClientRect();
+    const px = ((e.clientX - r.left) / r.width) * W;
+    const i = days.length === 1 ? 0
+      : Math.max(0, Math.min(days.length - 1, Math.round(((px - m.l) / iw) * n)));
+    cross.setAttribute("x1", X(i)); cross.setAttribute("x2", X(i));
+    cross.setAttribute("opacity", 1);
+    const rows = series.map(s => {
+      const p = s.pts.filter(q => q.x === i)[0];
+      return p ? '<span style="color:' + s.color + '">■</span> ' + s.cat + " <b>" + pct(p.v) + "</b>" : null;
+    }).filter(Boolean);
+    showTip(e, "<b>" + days[i].date + "</b><br>" + rows.join("<br>"));
+  });
+  hot.addEventListener("pointerleave", () => { cross.setAttribute("opacity", 0); hideTip(); });
+
+  box.appendChild(svg);
+  if (days.length === 1) {
+    const p = document.createElement("p");
+    p.className = "empty";
+    p.textContent = "まだ1日ぶんしかありません。日が重なると線になります。";
+    box.appendChild(p);
+  }
+}
+
+/* ---------- 棒：買い方ごとのバックテスト実測 ---------- */
+function barChart(backtested) {
+  const box = $("barChart");
+  box.textContent = "";
+  const rows = CATS.map(c => Object.assign({ cat: c }, backtested[c] || {}))
+                   .filter(r => r.roi != null);
+  if (!rows.length) { box.innerHTML = '<p class="empty">データがありません。</p>'; return; }
+
+  const W = 880, rowH = 46, m = { t: 26, r: 62, b: 8, l: 86 };
+  const H = m.t + rows.length * rowH + m.b;
+  const iw = W - m.l - m.r;
+  const hi = 1.08;
+  const X = (v) => (v / hi) * iw;
+  const color = cssVar("--series-1");
+
+  const svg = el("svg", { viewBox: "0 0 " + W + " " + H, role: "img",
+    "aria-label": "買い方ごとの実測回収率" });
+
+  [0.25, 0.5, 0.75, 1.0].forEach(function (v) {
+    const attrs = { x1: m.l + X(v), x2: m.l + X(v), y1: m.t - 6, y2: H - m.b,
+      stroke: v === 1 ? cssVar("--text-muted") : cssVar("--rule"),
+      "stroke-width": v === 1 ? 1.5 : 1 };
+    if (v === 1) attrs["stroke-dasharray"] = "5 4";
+    svg.appendChild(el("line", attrs));
+    svg.appendChild(el("text", { x: m.l + X(v), y: m.t - 12, "text-anchor": "middle",
+      fill: cssVar("--text-muted"), "font-size": 11 },
+      v === 1 ? "損益ゼロ 100%" : Math.round(v * 100) + "%"));
+  });
+
+  rows.forEach((r, i) => {
+    const y = m.t + i * rowH + 9;
+    const h = 20;
+    const g = el("g", {});
+    g.appendChild(el("text", { x: m.l - 12, y: y + h - 5, "text-anchor": "end",
+      fill: cssVar("--text-primary"), "font-size": 13 }, r.cat));
+    // データ側の角だけ丸める。基準線側は角のまま
+    const w = Math.max(X(r.roi), 6);
+    g.appendChild(el("path", {
+      d: "M" + m.l + " " + y + " H" + (m.l + w - 4) + " a4 4 0 0 1 4 4 V" + (y + h - 4) +
+         " a4 4 0 0 1 -4 4 H" + m.l + " Z",
+      fill: color }));
+    g.appendChild(el("text", { x: m.l + w + 9, y: y + h - 5, fill: cssVar("--text-primary"),
+      "font-size": 13, "font-weight": 600 }, pct(r.roi)));
+    const hot = el("rect", { x: m.l, y: y, width: iw, height: h, fill: "transparent" });
+    hot.addEventListener("pointermove", (e) =>
+      showTip(e, "<b>" + r.cat + "</b><br>" + (r.desc || "") + "<br>回収率 <b>" + pct(r.roi) + "</b>"));
+    hot.addEventListener("pointerleave", hideTip);
+    g.appendChild(hot);
+    svg.appendChild(g);
+  });
+  box.appendChild(svg);
+}
+
+/* ---------- 締切前のカード ---------- */
+function upcomingCards() {
+  const box = $("upcoming");
+  box.textContent = "";
+  const now = Date.now();
+  const soon = latest.races
+    .filter(r => r.deadline && new Date(r.deadline).getTime() > now && !r.settled)
+    .slice(0, 6);
+  if (!soon.length) {
+    box.innerHTML = '<p class="empty">締切前のレースはありません。本日の開催は終了、またはまだ生成していません。</p>';
+    return;
+  }
+  soon.forEach(function (r) {
+    const thick = r.picks.filter(p => p.category === "厚め")[0];
+    const best = thick || r.picks.slice().sort((a, b) => (b.prob || 0) - (a.prob || 0))[0];
+    const d = document.createElement("div");
+    d.className = "race";
+    const extra = best && best.odds
+      ? " ・ オッズ " + best.odds.toFixed(1) + " ・ 期待値 " + (best.ev != null ? best.ev.toFixed(2) : "—")
+      : "";
+    d.innerHTML =
+      '<div class="top"><span class="venue">' + r.venue + '</span><span class="r">' + r.rno + 'R</span>' +
+      '<span class="cd" data-deadline="' + r.deadline + '"></span></div>' +
+      '<div class="combo num">' + (best ? best.combo : "—") + '</div>' +
+      '<div class="meta num">確率 ' + pct(best ? best.prob : null) + extra + '</div>';
+    box.appendChild(d);
+  });
+  ticks();
+}
+
+function ticks() {
+  const now = Date.now();
+  document.querySelectorAll("[data-deadline]").forEach(function (n) {
+    const ms = new Date(n.dataset.deadline).getTime() - now;
+    if (ms <= 0) { n.textContent = "締切"; n.classList.remove("soon"); return; }
+    const s = Math.floor(ms / 1000);
+    // 「1:44」だと1時間44分に読めるので、単位を必ず添える
+    n.textContent = s >= 3600
+      ? "あと " + Math.floor(s / 3600) + "時間" + Math.floor(s % 3600 / 60) + "分"
+      : s >= 600 ? "あと " + Math.floor(s / 60) + "分"
+      : s >= 60 ? "あと " + Math.floor(s / 60) + "分" + String(s % 60).padStart(2, "0") + "秒"
+                : "あと " + s + "秒";
+    n.classList.toggle("soon", s < 900);
+  });
+}
+
+/* ---------- 表 ---------- */
+function table() {
+  const fb = $("filters");
+  fb.textContent = "";
+  ["すべて"].concat(CATS).forEach(function (c) {
+    const b = document.createElement("button");
+    b.type = "button"; b.textContent = c;
+    b.setAttribute("aria-pressed", String(c === filter));
+    b.onclick = () => { filter = c; table(); };
+    fb.appendChild(b);
+  });
+  const tb = $("tbody");
+  tb.textContent = "";
+  let shown = 0;
+  const frag = document.createDocumentFragment();
+  latest.races.forEach(function (r) {
+    r.picks.forEach(function (p) {
+      if (filter !== "すべて" && p.category !== filter) return;
+      shown++;
+      const tr = document.createElement("tr");
+      const res = p.hit == null ? '<span class="miss">—</span>'
+        : p.hit ? '<span class="hit">的中</span>' : '<span class="miss">外れ</span>';
+      tr.innerHTML =
+        "<td>" + r.venue + '</td><td class="r num">' + r.rno + "</td>" +
+        '<td class="num">' + (r.deadline ? r.deadline.slice(11, 16) : "—") + "</td>" +
+        "<td>" + p.category + '</td><td class="num">' + p.combo + "</td>" +
+        '<td class="r num">' + pct(p.prob) + "</td>" +
+        '<td class="r num">' + (p.odds ? p.odds.toFixed(1) : "—") + "</td>" +
+        '<td class="r num">' + (p.ev ? p.ev.toFixed(2) : "—") + "</td>" +
+        "<td>" + res + "</td>" +
+        '<td class="r num">' + (p.payout ? Math.round(p.payout).toLocaleString()
+                                         : (p.hit === false ? "0" : "—")) + "</td>";
+      frag.appendChild(tr);
+    });
+  });
+  tb.appendChild(frag);
+  $("tableSub").textContent =
+    latest.date + " の " + latest.races.length + " レース / " + shown.toLocaleString() +
+    " 買い目。外れも残しています。";
+}
+
+/* ---------- 描画 ---------- */
+function render() {
+  if (!latest || !history) return;
+
+  // ヒーロー：グラフに出している中で一番上の買い方の累積
+  const cum = history.total || {};
+  const heroCat = history.charted.filter(c => cum[c])[0] || Object.keys(cum)[0];
+  const roi = heroCat ? cum[heroCat].roi : null;
+  const bets = heroCat ? cum[heroCat].bets : 0;
+  $("heroCat").textContent = heroCat ? "（" + heroCat + "）" : "";
+  const hv = $("heroValue");
+  hv.textContent = pct(roi);
+  // 点数が足りないうちは色を付けない。数十点の回収率は運でいくらでも動くので、
+  // 緑にすると「勝っている」という誤った読み方を招く
+  const enough = bets >= MIN_BETS;
+  hv.className = "value num " + (roi == null || !enough ? "" : roi >= 1 ? "pos" : "neg");
+  $("heroGap").textContent =
+    roi == null ? "まだ確定した結果がありません。"
+    : !enough ? "まだ " + bets.toLocaleString() + " 点。回収率が意味を持つ点数ではありません（目安 "
+                + MIN_BETS.toLocaleString() + " 点）。この数字はまだ運です。"
+    : roi >= 1 ? "損益ゼロを " + ((roi - 1) * 100).toFixed(1) + " ポイント上回っています。"
+               : "損益ゼロまであと " + ((1 - roi) * 100).toFixed(1) + " ポイント。";
+
+  const races = latest.races.length;
+  const settled = latest.races.filter(r => r.settled).length;
+  const h = heroCat ? cum[heroCat] : null;
+  const bt = history.backtested[heroCat];
+  $("tiles").innerHTML = [
+    ["公開レース数", races.toLocaleString(), "うち結果確定 " + settled.toLocaleString()],
+    ["検証日数", history.days.length + "日", "公開初日からの通算"],
+    ["的中率", h ? pct(h.hits / h.bets) : "—", h ? h.hits + " / " + h.bets + " 点（" + heroCat + "）" : ""],
+    ["過去の実測", pct(bt ? bt.roi : null), "25,781レースのバックテスト"],
+  ].map(t => '<div class="tile"><div class="k">' + t[0] + '</div><div class="v num">' +
+             t[1] + '</div><div class="n">' + t[2] + "</div></div>").join("");
+
+  upcomingCards();
+  lineChart(history.days, history.charted);
+  barChart(history.backtested);
+  table();
+
+  $("commitLine").innerHTML = latest.commit
+    ? "このページのデータは <code>" + latest.commit + "</code> 時点のものです。予想を出した時刻はコミット履歴に残っており、後から書き換えられません。"
+    : "予想を出した時刻はコミット履歴に残っており、後から書き換えられません。";
+  freshness();
+}
+
+function freshness() {
+  if (!fetchedAt) return;
+  const s = Math.floor((Date.now() - fetchedAt) / 1000);
+  $("freshness").textContent = s < 60 ? "自動更新中" : Math.floor(s / 60) + "分前に更新";
+  $("dot").classList.toggle("stale", s > 180);
+}
+
+load();
+setInterval(load, REFRESH_MS);
+setInterval(() => { ticks(); freshness(); }, 1000);
+// タブに戻ってきたら即座に取り直す
+addEventListener("visibilitychange", () => { if (!document.hidden) load(); });
+</script>
+</body>
+</html>
